@@ -1,0 +1,43 @@
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.int_ga4_first_session_event,
+    dependencies: [tables.stg_ga4_base]
+}
+
+SELECT
+    event_date,
+    session_id,
+    session_timestamp,
+    user_pseudo_id,
+    device_category,
+    operating_system,
+    language,
+    browser,
+    hostname,
+    landing_page_location,
+    app_id,
+    app_version,
+    platform,
+    stream_id,
+    continent,
+    sub_continent,
+    country,
+    region,
+    city,
+    user_source,
+    user_medium,
+    open_session_source,
+    open_session_medium,
+    engaged_session_event,
+    session_engaged,
+    session_source,
+    session_medium,
+    session_campaign,
+    gads_campaign_id,
+    gads_campaign_name  
+FROM
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.stg_ga4_base} 
+WHERE
+    row_num = 1
+

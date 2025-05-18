@@ -1,0 +1,12 @@
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.int_ga4_session_start_status,
+    dependencies: [tables.stg_ga4_base]
+}
+SELECT 
+    session_id, 
+    LOGICAL_OR(event_name="session_start") as has_session_start 
+FROM 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.stg_ga4_base} 
+GROUP BY session_id
