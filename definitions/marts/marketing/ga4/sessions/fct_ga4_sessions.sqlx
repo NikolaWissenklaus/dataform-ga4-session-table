@@ -1,12 +1,20 @@
-
 config {
     type: "table",
-    name: bq_params.sessions_table
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.fct_ga4_sessions,
+    dependencies: [
+        tables.int_ga4_session_start_status,
+        tables.int_ga4_first_session_event,
+        tables.int_ga4_engaged_sessions,
+        tables.int_ga4_session_duration,
+        tables.int_ga4_engagement_time
+    ]
 }
 
-CREATE TEMP FUNCTION setCG(attr STRING)
-RETURNS STRING
-LANGUAGE js AS """
+pre_operations {
+  CREATE TEMP FUNCTION setCG(attr STRING)
+  RETURNS STRING
+  LANGUAGE js AS """
   
   var source = attr.split(' / ')[0];
   var medium = attr.split(' / ')[1];
@@ -926,173 +934,26 @@ LANGUAGE js AS """
     return canal;
 
 """;
+}
 
-WITH base AS (
-  SELECT
-    event_date,
-    event_timestamp,
-    event_name,
-    CONCAT(
-        user_pseudo_id,
-        (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id")
-    ) AS session_id,
-    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id") AS session_timestamp,
-    user_pseudo_id,
-    device.category AS device_category,
-    device.operating_system AS operating_system,
-    device.language AS language,
-    device.web_info.browser AS browser,
-    device.web_info.hostname AS hostname,
-    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = "page_location") AS landing_page_location,
-    app_info.id AS app_id,
-    app_info.version AS app_version,
-    platform,
-    stream_id,
-    geo.continent AS continent,
-    geo.sub_continent AS sub_continent,
-    geo.country AS country,
-    geo.region AS region,
-    geo.city AS city,
-    traffic_source.source AS user_source,
-    traffic_source.medium AS user_medium,
-    COALESCE((SELECT value.string_value FROM UNNEST(event_params) WHERE key = "source"), "(not set)") AS open_session_source,
-    COALESCE((SELECT value.string_value FROM UNNEST(event_params) WHERE key = "medium"), "(not set)") AS open_session_medium,
-    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'engaged_session_event' LIMIT 1) as engaged_session_event,
-    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'session_engaged' LIMIT 1) as session_engaged,
-    session_traffic_source_last_click.manual_campaign.source AS session_source,
-    session_traffic_source_last_click.manual_campaign.medium AS session_medium,
-    session_traffic_source_last_click.manual_campaign.campaign_name AS session_campaign,
-    session_traffic_source_last_click.google_ads_campaign.campaign_id AS gads_campaign_id,
-    session_traffic_source_last_click.google_ads_campaign.campaign_name AS gads_campaign_name,
-    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "engagement_time_msec") as engagement_time_msec,
-    is_active_user,
-
-    ROW_NUMBER() OVER (PARTITION BY CONCAT(
-        user_pseudo_id,
-        (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id")
-    ) ORDER BY event_timestamp) AS row_num
-  FROM
-    ${dataform.projectConfig.defaultDatabase}.${bq_params.ga4_dataset}.${bq_params.ga4_table} 
-),
----------------------------------------------------------------
-
-session_start_status AS (
-  SELECT 
-    session_id, 
-    LOGICAL_OR(event_name="session_start") as has_session_start 
-  FROM 
-    base 
-  group by session_id
-),
 
 ---------------------------------------------------------------
-primeira_linha AS (
-  SELECT
-    event_date,
-    session_id,
-    session_timestamp,
-    user_pseudo_id,
-    device_category,
-    operating_system,
-    language,
-    browser,
-    hostname,
-    landing_page_location,
-    app_id,
-    app_version,
-    platform,
-    stream_id,
-    continent,
-    sub_continent,
-    country,
-    region,
-    city,
-    user_source,
-    user_medium,
-    open_session_source,
-    open_session_medium,
-    engaged_session_event,
-    session_engaged,
-    session_source,
-    session_medium,
-    session_campaign,
-    gads_campaign_id,
-    gads_campaign_name  
-  FROM
-    base
-  WHERE
-    row_num = 1
-),
----------------------------------------------
-eventos_nas_sessoes_quase_engajadas AS (
-  SELECT 
-    DISTINCT session_id,
-  FROM
-    base
-  WHERE
-    (
-      engaged_session_event = 1
-      OR
-      session_engaged = "1"
-    )
-)
 
-,sessoes_engajadas AS (
-  SELECT 
-    session_id,
-    1 AS is_engaged
-  FROM 
-    eventos_nas_sessoes_quase_engajadas
-),
----------------------------------------------------------------
-session_start_and_end_time as (
-  SELECT 
-    DISTINCT 
-    session_id,
-    MIN(event_timestamp) OVER (PARTITION BY user_pseudo_id, session_id) AS first_session_timestamp,
-    MAX(event_timestamp) OVER (PARTITION BY user_pseudo_id, session_id) AS last_session_timestamp
-  FROM 
-    base
-)
-
-,duracao_por_sessao as (
-  SELECT 
-    session_id, 
-    (last_session_timestamp - first_session_timestamp) as session_length_seconds_mls,
-    CAST(FLOOR((last_session_timestamp - first_session_timestamp)/1000000) AS INT64) AS session_length_seconds
-  FROM 
-    session_start_and_end_time
-)
----------------------------------------------------------------
-
-,unir_tempo_com_engajamento AS (
+WITH unir_tempo_com_engajamento AS (
   SELECT 
     d.session_id,
     d.session_length_seconds_mls,
     d.session_length_seconds,
     IFNULL(s.is_engaged, 0) AS is_engaged_session
-  FROM duracao_por_sessao d
-  LEFT JOIN sessoes_engajadas s ON
+  FROM 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.int_ga4_session_duration} d
+  LEFT JOIN 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.int_ga4_engaged_sessions} s 
+    ON
     d.session_id = s.session_id
 )
 
 ---------------------------------------------------------------
-, engagement_time as (
-  SELECT
-    session_id,
-    SUM(engagement_time_msec) AS engagement_msec,
-    CAST(FLOOR(SUM(FLOOR(engagement_time_msec / 1000))) AS INT64) AS engagement_seconds,
-  FROM
-    base  
-  WHERE
-    event_name NOT IN ("first_visit", "session_start")
-    AND
-    is_active_user is true
-    AND
-    engagement_time_msec > 0
-  GROUP BY
-    session_id
-)
 
 ,unir_metricas AS (
   SELECT 
@@ -1102,8 +963,11 @@ session_start_and_end_time as (
     un.is_engaged_session,
     IFNULL(et.engagement_msec, 0) AS engagement_msec,
     IFNULL(et.engagement_seconds, 0) AS engagement_seconds
-  FROM engagement_time et
-  LEFT JOIN unir_tempo_com_engajamento un ON
+  FROM 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.int_ga4_engagement_time} et
+  LEFT JOIN 
+    unir_tempo_com_engajamento un 
+    ON
     et.session_id = un.session_id
 ),
 
@@ -1144,9 +1008,11 @@ atribuicao_inicial AS (
     utce.engagement_msec,
     utce.engagement_seconds,
   FROM
-    primeira_linha
-  LEFT JOIN unir_metricas utce
-    ON   primeira_linha.session_id = utce.session_id
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.int_ga4_first_session_event} as primeira_linha
+  LEFT JOIN 
+    unir_metricas utce
+    ON   
+    primeira_linha.session_id = utce.session_id
 ),
 
 ---------------------------------------------------------------
@@ -1223,13 +1089,15 @@ sessions_base_final AS (
       ai.engagement_seconds
   FROM
       atribuicao_inicial AS ai
-  LEFT JOIN session_start_status AS sss
-  ON sss.session_id = ai.session_id
+  LEFT JOIN 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.int_ga4_session_start_status} AS sss
+    ON 
+    sss.session_id = ai.session_id
 )
 ---------------------------------------------------------------
 
 SELECT 
-  event_date,
+  event_date AS session_date,
   session_id,
   session_timestamp,
   user_pseudo_id,

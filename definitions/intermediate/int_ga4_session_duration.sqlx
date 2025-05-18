@@ -1,0 +1,23 @@
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.int_ga4_session_duration,
+    dependencies: [tables.stg_ga4_base]
+}
+
+WITH session_start_and_end_time as (
+  SELECT 
+    DISTINCT 
+    session_id,
+    MIN(event_timestamp) OVER (PARTITION BY user_pseudo_id, session_id) AS first_session_timestamp,
+    MAX(event_timestamp) OVER (PARTITION BY user_pseudo_id, session_id) AS last_session_timestamp
+  FROM 
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.stg_ga4_base}
+)
+
+ SELECT 
+    session_id, 
+    (last_session_timestamp - first_session_timestamp) as session_length_seconds_mls,
+    CAST(FLOOR((last_session_timestamp - first_session_timestamp)/1000000) AS INT64) AS session_length_seconds
+FROM 
+    session_start_and_end_time

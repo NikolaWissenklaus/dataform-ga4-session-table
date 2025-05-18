@@ -1,0 +1,52 @@
+
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.stg_ga4_base
+}
+
+SELECT
+    event_date,
+    event_timestamp,
+    event_name,
+    CONCAT(
+        user_pseudo_id,
+        (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id")
+    ) AS session_id,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id") AS session_timestamp,
+    user_pseudo_id,
+    device.category AS device_category,
+    device.operating_system AS operating_system,
+    device.language AS language,
+    device.web_info.browser AS browser,
+    device.web_info.hostname AS hostname,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = "page_location") AS landing_page_location,
+    app_info.id AS app_id,
+    app_info.version AS app_version,
+    platform,
+    stream_id,
+    geo.continent AS continent,
+    geo.sub_continent AS sub_continent,
+    geo.country AS country,
+    geo.region AS region,
+    geo.city AS city,
+    traffic_source.source AS user_source,
+    traffic_source.medium AS user_medium,
+    COALESCE((SELECT value.string_value FROM UNNEST(event_params) WHERE key = "source"), "(not set)") AS open_session_source,
+    COALESCE((SELECT value.string_value FROM UNNEST(event_params) WHERE key = "medium"), "(not set)") AS open_session_medium,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'engaged_session_event' LIMIT 1) as engaged_session_event,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = 'session_engaged' LIMIT 1) as session_engaged,
+    session_traffic_source_last_click.manual_campaign.source AS session_source,
+    session_traffic_source_last_click.manual_campaign.medium AS session_medium,
+    session_traffic_source_last_click.manual_campaign.campaign_name AS session_campaign,
+    session_traffic_source_last_click.google_ads_campaign.campaign_id AS gads_campaign_id,
+    session_traffic_source_last_click.google_ads_campaign.campaign_name AS gads_campaign_name,
+    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "engagement_time_msec") as engagement_time_msec,
+    is_active_user,
+
+    ROW_NUMBER() OVER (PARTITION BY CONCAT(
+        user_pseudo_id,
+        (SELECT value.int_value FROM UNNEST(event_params) WHERE key = "ga_session_id")
+    ) ORDER BY event_timestamp) AS row_num
+FROM
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_dataset}.${tables.ga4_table} 

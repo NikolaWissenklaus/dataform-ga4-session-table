@@ -1,0 +1,21 @@
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.int_ga4_engagement_time,
+    dependencies: [tables.stg_ga4_base]
+}
+
+SELECT
+    session_id,
+    SUM(engagement_time_msec) AS engagement_msec,
+    CAST(FLOOR(SUM(FLOOR(engagement_time_msec / 1000))) AS INT64) AS engagement_seconds,
+FROM
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.stg_ga4_base}  
+WHERE
+    event_name NOT IN ("first_visit", "session_start")
+    AND
+    is_active_user is true
+    AND
+    engagement_time_msec > 0
+GROUP BY
+    session_id

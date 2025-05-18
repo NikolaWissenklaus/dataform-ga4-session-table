@@ -1,0 +1,25 @@
+config {
+    type: "table",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.int_ga4_engaged_sessions,
+    dependencies: [tables.stg_ga4_base]
+}
+
+WITH eventos_nas_sessoes_quase_engajadas AS (
+  SELECT 
+    DISTINCT session_id,
+  FROM
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.stg_ga4_base}
+  WHERE
+    (
+      engaged_session_event = 1
+      OR
+      session_engaged = "1"
+    )
+)
+
+SELECT 
+    session_id,
+    1 AS is_engaged
+FROM 
+    eventos_nas_sessoes_quase_engajadas
