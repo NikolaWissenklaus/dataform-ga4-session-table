@@ -943,6 +943,7 @@ WITH base AS (
     device.language AS language,
     device.web_info.browser AS browser,
     device.web_info.hostname AS hostname,
+    (SELECT value.string_value FROM UNNEST(event_params) WHERE key = "page_location") AS landing_page_location,
     app_info.id AS app_id,
     app_info.version AS app_version,
     platform,
@@ -996,6 +997,7 @@ primeira_linha AS (
     language,
     browser,
     hostname,
+    landing_page_location,
     app_id,
     app_version,
     platform,
@@ -1117,6 +1119,7 @@ atribuicao_inicial AS (
     language,
     browser,
     hostname,
+    landing_page_location,
     app_id,
     app_version,
     platform,
@@ -1157,6 +1160,14 @@ sessions_base_final AS (
       ai.operating_system,
       ai.language,
       ai.browser,
+      COALESCE(
+      REGEXP_EXTRACT(
+          ai.landing_page_location, 
+          r'^https?://[^/]+(/[^?]*)'
+        ), 
+        '/'
+      ) AS landing_page_path,
+      ai.landing_page_location,
       ai.hostname,
       COALESCE(ai.app_id, "-") as app_id,
       COALESCE(ai.app_version, "-") as app_version,
@@ -1202,8 +1213,6 @@ sessions_base_final AS (
           ai.session_medium
       ) AS session_medium,
       
-
-
       ai.session_campaign,
       COALESCE(ai.gads_campaign_id, "-") as gads_campaign_id,
       COALESCE(ai.gads_campaign_name, "-") as gads_campaign_name,
@@ -1229,6 +1238,8 @@ SELECT
   language,
   browser,
   hostname,
+  landing_page_path,
+  landing_page_location,
   app_id,
   app_version,
   platform,
