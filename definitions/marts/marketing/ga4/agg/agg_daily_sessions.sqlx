@@ -1,0 +1,24 @@
+config {
+    type: "incremental",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.agg_ga4_sessions,
+    dependencies: [tables.fct_ga4_sessions]
+}
+
+SELECT
+  session_date,
+  COUNT(DISTINCT session_id) AS total_sessions,
+  SUM(is_engaged_session) AS total_engaged_sessions,
+  COUNT(DISTINCT user_pseudo_id) AS unique_users,
+  AVG(session_length_seconds) AS avg_session_duration,
+  AVG(engagement_seconds) AS avg_session_engagement_seconds,
+  
+FROM
+    ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.fct_ga4_sessions}
+WHERE NOT EXISTS (
+  SELECT session_date 
+  FROM     ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.agg_ga4_sessions} existentes
+  WHERE existentes.session_date = session_date
+) 
+GROUP BY
+  session_date

@@ -36,6 +36,9 @@ const int_ga4_engagement_time = "int_ga4_engagement_time";
 //Fatos
 const fct_ga4_sessions = "fct_ga4_sessions_" + getDateNDaysAgo(sla);
 
+//Agregados
+const agg_ga4_sessions = "agg_daily_sessions";
+
 
 //====================================================================================================
 
@@ -50,11 +53,7 @@ module.exports = {
     int_ga4_session_duration,
     int_ga4_engagement_time,
 
-    fct_ga4_sessions
+    fct_ga4_sessions,
+
+    agg_ga4_sessions
 };
-
-
-
-
-
-
