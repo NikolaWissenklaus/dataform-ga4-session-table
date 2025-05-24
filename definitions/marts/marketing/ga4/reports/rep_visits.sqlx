@@ -1,0 +1,31 @@
+config {
+    type: "incremental",
+    schema: datasets.ga4_sessions_dataset,
+    name: tables.rep_visits,
+    dependencies: [tables.fct_ga4_sessions]
+}
+
+SELECT
+        session_date,
+        session_id,
+        user_pseudo_id,
+        device_category,
+        operating_system,
+        landing_page_path,
+        continent,
+        sub_continent,
+        country,
+        region,
+        city,
+        session_source,
+        session_medium,
+        session_campaign,
+        session_channel_group,
+        session_length_seconds,
+        is_engaged_session,
+        engagement_seconds
+FROM
+  ${dataform.projectConfig.defaultDatabase}.${datasets.ga4_sessions_dataset}.${tables.fct_ga4_sessions}
+
+WHERE
+    platform = "WEB"

@@ -39,6 +39,8 @@ const fct_ga4_sessions = "fct_ga4_sessions_" + getDateNDaysAgo(sla);
 //Agregados
 const agg_ga4_sessions = "agg_daily_sessions";
 
+//Relatorios
+const rep_visits = "rep_visits";
 
 //====================================================================================================
 
@@ -55,5 +57,7 @@ module.exports = {
 
     fct_ga4_sessions,
 
-    agg_ga4_sessions
+    agg_ga4_sessions,
+
+    rep_visits
 };
