@@ -1,0 +1,11 @@
+Adicionar colunas:
+- event_count
+- page_views
+- screen_views
+- conversions
+- revenue
+
+Adicionar filtros para remover eventos lixo:
+- Ad manager
+- push notification
+- Automaticos
